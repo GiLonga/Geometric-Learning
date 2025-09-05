@@ -1,7 +1,7 @@
 import scipy
 import numpy as np
 import matplotlib.pyplot as plt
-from utils import compute_area, compute_center_of_mass
+from utils import compute_area, compute_center_of_mass, translate_center_of_mass
 
 class Preprocess():
     """
@@ -79,26 +79,58 @@ class Preprocess():
         curve = self.data[curve_number,:,:]
         rotation_matrix = np.array([[np.cos(theta), -np.sin(theta)],
                                      [np.sin(theta),  np.cos(theta)]])
-        rotated_curve = curve @ rotation_matrix.T
+        rotated_curve = curve @ rotation_matrix.T #@ matrix multiplication
         return rotated_curve
+    
+    def rotate_axis(self, curve_number: int) -> np.array:
+        
+        curve = translate_center_of_mass(self.scale_unit_area(curve_number))
+        vector = curve[np.argmax(curve[:,1]), :]
+        n_vector = vector/np.sqrt(np.power(vector[0],2) + np.power(vector[1], 2))
+        x = n_vector[0]
+        y = n_vector[1]
+        rotation_matrix = np.array([[y, -x], [x, y]])
+        curve_rotated_axis = (rotation_matrix @ curve.T).T
+
+        xpoints = np.array([0, vector[0]])
+        ypoints = np.array([0, vector[1]])        
+        
+        plt.plot(xpoints, ypoints)
+        plt.plot(curve[:, 0], curve[:, 1])
+        plt.plot(curve_rotated_axis[:, 0], curve_rotated_axis[:, 1])
+
+        plt.show()
+
+        return curve_rotated_axis
+
+        
 
 if __name__ == "__main__":
     # THIS IS A COMMENT
-    path = #INSERT THE PATH TO YOUR DATA
-    A = scipy.io.loadmat(PATH)
+    path =  r'C:\Users\user1\Documents\MATLAB\Shared_Files\Shared_Files\leaves_parameterized.mat'
+    A = scipy.io.loadmat(path)
     my_first_class = Preprocess(A['leaves_parameterized'])
     print("Normalizing the second leaf by length")
     print(my_first_class.curve_unite_length(1))
     print("Normalizing the second leaf by area")
     print(my_first_class.scale_unit_area(1))
 
-    plt.plot(my_first_class.data[1,:,0], my_first_class.data[1,:,1], label='Original Curve')
-    rotated_leaf = my_first_class.rotate_shape(1, np.pi/4)
-    plt.plot(rotated_leaf[:,0], rotated_leaf[:,1], label='Rotated pi/4')
-    return_leaf = my_first_class.rotate_shape(1, -np.pi/4)
-    plt.plot(return_leaf[:,0], return_leaf[:,1], label='Rotated -pi/4')
+    #plt.plot(my_first_class.data[1,:,0], my_first_class.data[1,:,1], label='Original Curve')
+    #rotated_leaf = my_first_class.rotate_shape(1, np.pi/4)
+    #plt.plot(rotated_leaf[:,0], rotated_leaf[:,1], label='Rotated pi/4')
+    #return_leaf = my_first_class.rotate_shape(1, -np.pi/4)
+    #plt.plot(return_leaf[:,0], return_leaf[:,1], label='Rotated -pi/4')
+    
+    leaf_vertical_axis = my_first_class.rotate_axis(1)
+    #plt.plot(leaf_vertical_axis[:,0], leaf_vertical_axis[:,1])
 
-    plt.legend()
+    #xpoints = np.array([0, 0])
+    #ypoints = np.array([0, 2])
+
+    #plt.plot(xpoints, ypoints)
+
+
+    #plt.legend()
     plt.show()
 
     print("Center of mass:" , compute_center_of_mass(my_first_class.data[1,:,:]))
