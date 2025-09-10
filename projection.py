@@ -70,7 +70,7 @@ def proj_clock_etapesbis(curve, N, a, lmbda):
     #etape4_ellipse, etape4_ellipse_surface, etape4, etape5)
 
 def projection_prop_curv_lambda_length_in_R2(curve, N, lmbda = None):
-    """ Project a 2D curve onto a new parameterization that is proportional to its curvature and length.
+    """ Project a 2D curve onto a new parameterization proportional to its curvature and length.
     Parameters
     ----------
     curve : np.array
@@ -100,16 +100,16 @@ def projection_prop_curv_lambda_length_in_R2(curve, N, lmbda = None):
                 arc_length_parametrized_curve[j+1,i] - 2*arc_length_parametrized_curve[j,i] + arc_length_parametrized_curve[j-1,i])*(gs.power((N-1),2)/(length**2))
         f_seconde[0,i] = 0
         f_seconde[-1,i] = 0
-    
-    curvature = gs.linalg.norm(f_seconde, axis = 1 ) #Curvature as the increment of the velocity vector
-    #curvature2 = np.sqrt(gs.power(f_seconde[:,0],2) + gs.power(f_seconde[:,1],2))
-    
+
+    curvature = gs.linalg.norm(f_seconde, axis = 1 ) #Curvature = increment of the velocity vect
     curvedelta = gs.zeros(N)
+    
     # --- Step 3: Curvature-weighted arc length ---
     if lmbda is None:
         weights = curvature
     else:
         weights = lmbda*length + curvature
+        #weights = lmbda + curvature
     total_curve_arc_length = np.trapz(weights, newdelta)
     for s in range(1,N,1):
         #With the 1 + curvature
@@ -193,13 +193,17 @@ def reparametrize_by_arc_length(curve, N, normalized = True):
         arc_length_parametrized_curve[:, i] = interp1d(cumdelta, curve[:, i], kind="linear", fill_value="extrapolate")(newdelta)
     return newdelta,arc_length_parametrized_curve
 
-def projection_clock_20(curve, number_of_angles = 20):
+def projection_clock_20(curve, number_of_angles = 20, lmbda = None):
     """
     Project a 2D curve onto a clock parameterization with a = 20.
     Parameters
     ----------
     curve : np.array
         An array of shape (nb_frame, 2) representing the 2D curve.
+    number_of_angles : int
+        The number of angles in the clock parameterization (default is 20).
+    lmbda : float
+        A parameter that balances the influence of length and curvature in the new parameterization (default is None).
     Returns
     -------
     angles : np.array
@@ -235,26 +239,45 @@ def projection_clock_20(curve, number_of_angles = 20):
         # Create uniform subdivision
         unif_subset = int(np.floor(N/number_of_angles))
         newdel2 = np.linspace(argument[0], argument[-1], num = unif_subset)
-        clock_parametrized_function_a = gs.zeros((nb_frames, dim))
+        clock_param_fun_a = gs.zeros((nb_frames, dim))
         # Interpolate for each dimension
 
         for d in range(dim):
             portion_of_x_and_y = curve3[indices[k]:indices[k + 1] + 1, d]
             f_interp = interp1d(argument, portion_of_x_and_y, kind='linear')
-            clock_parametrized_function_a[(k)*unif_subset:(k+1)*unif_subset, d] = f_interp(newdel2)
+            clock_param_fun_a[(k)*unif_subset:(k+1)*unif_subset, d] = f_interp(newdel2)
 
 
         # Plot the second coordinate
         plt.plot(
-            clock_parametrized_function_a[(k) * unif_subset: ( k + 1 ) * unif_subset, 0], 
-            clock_parametrized_function_a[(k) * unif_subset: ( k + 1 ) * unif_subset, 1],
+            clock_param_fun_a[(k) * unif_subset: ( k + 1 ) * unif_subset, 0], 
+            clock_param_fun_a[(k) * unif_subset: ( k + 1 ) * unif_subset, 1],
             '*',
             color=colorbar_rainbow(k / (len(indices) - 1)))
         #Adding lines for the subsections
-        plt.plot([0,clock_parametrized_function_a[( k ) * unif_subset, 0]],[0,clock_parametrized_function_a[( k ) * unif_subset, 1]],'k--')
+        plt.plot([0,clock_param_fun_a[( k ) * unif_subset, 0]],[0,clock_param_fun_a[( k ) * unif_subset, 1]],'k--')
     plt.title(f'Clock parameterization with number of angles = {number_of_angles}')
     plt.axis('equal')
     plt.show()
+
+    clock_param_fun_a_lambda = gs.zeros((clock_param_fun_a.shape[0],dim))
+    if lmbda is not None:
+        for k in range(indices.shape[0] - 1):
+            #seg = curve3[indices[k]:indices[k + 1] + 1]
+            argument = newdelta[indices[k]:indices[k + 1] + 1]
+            newdel2 = np.linspace(argument[0], argument[-1], num = unif_subset)
+            clock_param_fun_a_lambda[(k)*unif_subset:(k+1)*unif_subset], _, _ = projection_prop_curv_lambda_length_in_R2(curve3[indices[k]:indices[k + 1]], unif_subset, lmbda)#[0][:,0]
+            plt.plot(
+            clock_param_fun_a_lambda[(k) * unif_subset: ( k + 1 ) * unif_subset, 0], 
+            clock_param_fun_a_lambda[(k) * unif_subset: ( k + 1 ) * unif_subset, 1],
+            '*',
+            color=colorbar_rainbow(k / (len(indices) - 1)))
+        #Adding lines for the subsections
+            plt.plot([0,clock_param_fun_a_lambda[( k ) * unif_subset, 0]],[0,clock_param_fun_a_lambda[( k ) * unif_subset, 1]],'k--')
+        plt.title(f'Clock parameterization with number of angles = {number_of_angles} and lambda = {lmbda}')
+        plt.axis('equal')
+        plt.show()
+
     return angles
 
 def extract_uniform_angles(a, angles):
@@ -324,7 +347,7 @@ if __name__ == "__main__":
     curve = leaves[75,:,:]
     N_input = 200      # number of input samples
     N_output = 300     # number of output samples for reparametrization
-    lmbda = None     # balance between arc length and curvature
+    lmbda = 0.3 # balance between arc length and curvature
 
     # Example curve: ellipse
     t = np.linspace(0, 2*np.pi, N_input)
@@ -342,7 +365,8 @@ if __name__ == "__main__":
 
     # Plot original vs. reparameterized curve
     axs[0].plot(f[:, 0], f[:, 1], 'b-', label="Original curve", linewidth=1.2)
-    axs[0].plot(new_curve[:, 0], new_curve[:, 1], 'r--', label="Reparameterized curve", linewidth=1.2)
+    axs[0].plot(new_curve[:,0], new_curve[:,1], 'r*', label="Reparameterized curve",)
+    #axs[0].plot(new_curve[:, 0], new_curve[:, 1], 'r--', label="Reparameterized curve", linewidth=1.2)
     axs[0].axis("equal")
     axs[0].legend()
     axs[0].set_title("Curve comparison")
@@ -362,4 +386,4 @@ if __name__ == "__main__":
     plt.tight_layout()
     plt.show()
 
-    ang = projection_clock_20(curve, number_of_angles = 12)
+    ang = projection_clock_20(curve, number_of_angles = 12, lmbda = lmbda)
