@@ -90,16 +90,7 @@ def projection_prop_curv_lambda_length_in_R2(curve, N, lmbda = None):
 
     # --- First Step: Arc Length Parameterization ---
     length = compute_length(curve)
-    deltas = gs.linalg.norm(np.diff(curve, axis=0), axis=1) + 1e-6
-    deltas = np.insert(deltas, 0, 0.0)
-    cumdelta = gs.cumsum(deltas)#/length #arch length parameterization
-    newdelta = gs.linspace(0, length, N) #uniform parameterization
-    newdelta[-1] = cumdelta[-1] # ensure the last point matches exactly
-
-    # Interpolate to uniform arc-length
-    arc_length_parametrized_curve = gs.zeros((N, dim))
-    for i in range(dim):
-        arc_length_parametrized_curve[:, i] = interp1d(cumdelta, curve[:, i], kind="linear", fill_value="extrapolate")(newdelta)
+    newdelta, arc_length_parametrized_curve = reparametrize_by_arc_length(curve, N, normalized = False)
 
     # --- Step 2: Second derivative (curvature numerator)
     f_seconde = gs.zeros(arc_length_parametrized_curve.shape)
@@ -155,37 +146,72 @@ def projection_prop_curv_lambda_length_in_R2(curve, N, lmbda = None):
     signed_curvature_arclength = interp1d(curvedelta, signed_curvature_arclength,  kind='cubic', fill_value="extrapolate")(newcurvedelta)
 
     #STUBB
-    plt.plot(curve[:,0], curve[:,1], 'r-')
-    plt.plot(arc_length_parametrized_curve[:,0], arc_length_parametrized_curve[:,1], 'y*')
-    plt.plot(function_parametrized_prop_to_curv_arc_length[:,0], function_parametrized_prop_to_curv_arc_length[:,1], 'b*')
-    plt.title('Arc length parameterization')
-    plt.axis('equal')
-    plt.show()
+    #plt.plot(curve[:,0], curve[:,1], 'r-')
+    #plt.plot(arc_length_parametrized_curve[:,0], arc_length_parametrized_curve[:,1], 'y*')
+    #plt.plot(function_parametrized_prop_to_curv_arc_length[:,0], function_parametrized_prop_to_curv_arc_length[:,1], 'b*')
+    #plt.title('Arc length parameterization')
+    #plt.axis('equal')
+    #plt.show()
 
-    plt.plot(curvature, 'k-')
-    plt.title('Curvature')
-    plt.axis('equal')
-    plt.show()
+    #plt.plot(curvature, 'k-')
+    #plt.title('Curvature')
+    #plt.axis('equal')
+    #plt.show()
 
     return function_parametrized_prop_to_curv_arc_length, curvedelta, signed_curvature_arclength
 
+def reparametrize_by_arc_length(curve, N, normalized = True):
+    """ Reparameterize a 2D curve by its arc length.
+    Parameters
+    ----------
+    curve : np.array
+        An array of shape (nb_frame, 2) representing the 2D curve.
+    N : int
+        The number of points in the output curve.
+    Returns
+    -------
+    newdelta : np.array
+        An array of shape (N,) representing the new arc length parameterization.
+    arc_length_parametrized_curve : np.array
+        An array of shape (N, 2) representing the curve reparameterized by arc length.
+    """
+    dim = curve.shape[1]
+    length = compute_length(curve)
+    deltas = gs.linalg.norm(np.diff(curve, axis=0), axis=1) + 1e-6
+    deltas = np.insert(deltas, 0, 0.0)
+    cumdelta = gs.cumsum(deltas)
+    if normalized:
+        cumdelta = cumdelta/length
+        newdelta = gs.linspace(0, 1, N)
+    else:
+        newdelta = gs.linspace(0, length, N) 
+    #newdelta[-1] = cumdelta[-1] # ensure the last point matches exactly
+
+    # Interpolate to uniform arc-length
+    arc_length_parametrized_curve = gs.zeros((N, dim))
+    for i in range(dim):
+        arc_length_parametrized_curve[:, i] = interp1d(cumdelta, curve[:, i], kind="linear", fill_value="extrapolate")(newdelta)
+    return newdelta,arc_length_parametrized_curve
+
 def projection_clock_20(curve):
-    """ TO DO """
+    """
+    Project a 2D curve onto a clock parameterization with a = 20.
+    Parameters
+    ----------
+    curve : np.array
+        An array of shape (nb_frame, 2) representing the 2D curve.
+    Returns
+    -------
+    angles : np.array
+        An array of shape (nb_frame,) representing the angles in the clock parameterization.
+    """
 
     nb_frames, dim = curve.shape
     curve2 = gs.zeros((nb_frames, dim))
-    clock_parametrized_function_20 = gs.zeros((nb_frames, dim))
-    fig_nb = 0
-    a = 20
+    a = 20 #This should be an Hyperparam.
     N = nb_frames
-    length = compute_length(curve)
-    delta = gs.zeros(nb_frames)
-    for s in range(1,nb_frames,1):
-        delta[s] = gs.linalg.norm(curve[s,:]-curve[s-1,:]) + 1e-6
-    cumdelta = gs.cumsum(delta)/length #arch length parameterization
-    newdelta = gs.linspace(0,1, nb_frames) #uniform parameterization
-    for i in range(dim):
-        curve2[:,i] = interp1d(cumdelta, curve[:,i], kind="linear", fill_value="extrapolate")(newdelta)
+
+    newdelta, curve2 = reparametrize_by_arc_length(curve, nb_frames)    
     curve2 = get_max_y_and_roll(curve2)
     area = compute_area(curve2)
     curve2 = translate_center_of_mass(curve2)
@@ -195,37 +221,15 @@ def projection_clock_20(curve):
     if curve3[int(np.ceil(nb_frames/4)) - 1, 0] > 0:
         curve3 = np.flipud(curve3)
 
+    #Normalizing the distances from the center (center of mass (0,0)) to each point to 1
     unite_curve = gs.zeros((nb_frames, dim))
     for i in range(nb_frames):
         unite_curve[i,:] = curve3[i,:] /(gs.linalg.norm(curve3[i,:]))
-    n = gs.zeros(2)
-    # Compute the sequence of angles
-    angles = gs.zeros(nb_frames)
-    for i in range(1, nb_frames, 1):
-        angle_vert = unite_curve[i,:] - gs.dot(unite_curve[i,:], unite_curve[i-1,:])*unite_curve[i-1,:]
-        n[0] = - unite_curve[i-1,1]
-        n[1] = unite_curve[i-1,0]
-        sinus_angle = gs.dot(angle_vert, n)
-        if sinus_angle >= 0:
-            angles[i] = angles[i-1] + gs.arccos(gs.dot(unite_curve[i,:], unite_curve[i-1,:]))
-        else:
-            angles[i] = angles[i-1] - gs.arccos(gs.dot(unite_curve[i,:], unite_curve[i-1,:]))
 
+    angles = extract_angle_sequence(unite_curve)
     
-    angles_uniform = gs.zeros(a)
-    indices = gs.zeros(a, dtype=int)
-    indices[0] = 0 # TOCHECK
-    for s in range(a-1):
-        angles_uniform[s] = angles[0] + (s+1)* 2*np.pi/(a-1)
+    indices = extract_uniform_angles(a, angles) #Indixes of the curve points closest to the uniform angles
     
-    j = 0
-    for i in range(1, nb_frames-1, 1):
-        if np.max(angles[:i]) > angles_uniform[j]:
-            indices[j+1] = i
-            j += 1
-
-    indices[j+1] = nb_frames
-    #center_x_y = compute_center_of_mass(curve3)
     for k in range(len(indices) - 1):
         argument = newdelta[indices[k]:indices[k + 1] + 1] #Taking a portion of the uniform param.
 
@@ -247,24 +251,67 @@ def projection_clock_20(curve):
             clock_parametrized_function_a[(k) * unif_subset: ( k + 1 ) * unif_subset, 1],
             '*',
             color=colorbar_rainbow(k / (len(indices) - 1)))
-        plt.plot([0,clock_parametrized_function_a[( k ) * unif_subset, 0]],[0,clock_parametrized_function_a[( k ) * unif_subset, 1]],'k-')
-    plt.title('Clock parameterization with a = 20')
+        #Adding lines for the subsections
+        plt.plot([0,clock_parametrized_function_a[( k ) * unif_subset, 0]],[0,clock_parametrized_function_a[( k ) * unif_subset, 1]],'k--')
+    plt.title(f'Clock parameterization with a = {a}')
     plt.axis('equal')
     plt.show()
     return angles
 
+def extract_uniform_angles(a, angles):
+    """ Extract indices corresponding to uniform angles in a 2D curve.
+    Parameters
+    ----------
+    a : int
+        The number of uniform angles to extract.
+    angles : np.array
+        An array of shape (nb_frames,) representing the angles of the curve.
+    Returns
+    -------
+    indices : np.array
+        An array of shape (a+1,) representing the indices of the curve corresponding to uniform angles.
+    """
+    nb_frames = angles.shape[0]
+    angles_uniform = gs.zeros(a)
+    indices = gs.zeros(a, dtype=int)
+    indices[0] = 0 # TOCHECK
+    for s in range(a-1):
+        angles_uniform[s] = angles[0] + (s+1)* 2*np.pi/(a-1)
+    
+    j = 0
+    for i in range(1, nb_frames-1, 1):
+        if np.max(angles[:i]) > angles_uniform[j]:
+            indices[j+1] = i
+            j += 1
 
+    indices[j+1] = nb_frames
+    return indices
 
-
-
-
-
-
-
-
-
-
-
+def extract_angle_sequence(unite_curve):
+    """ Extract a sequence of angles from a 2D curve.
+    Parameters
+    ----------
+    unite_curve : np.array
+        An array of shape (nb_frames, 2) representing the 2D curve with unit length.
+    Returns
+    -------
+    angles : np.array
+        An array of shape (nb_frames,) representing the angles of the curve.
+    """
+    nb_frames= unite_curve.shape[0]
+    n = gs.zeros(2)
+    # Compute the sequence of angles
+    angles = gs.zeros(nb_frames)
+    for i in range(1, nb_frames, 1):
+        angle_vert = unite_curve[i,:] - gs.dot(unite_curve[i,:], unite_curve[i-1,:])*unite_curve[i-1,:]
+        n[0] = - unite_curve[i-1,1]
+        n[1] = unite_curve[i-1,0]
+        sinus_angle = gs.dot(angle_vert, n)
+        if sinus_angle >= 0:
+            angles[i] = angles[i-1] + gs.arccos(gs.dot(unite_curve[i,:], unite_curve[i-1,:]))
+        else:
+            angles[i] = angles[i-1] - gs.arccos(gs.dot(unite_curve[i,:], unite_curve[i-1,:]))
+    return angles
 
 
 
