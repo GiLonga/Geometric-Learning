@@ -27,6 +27,28 @@ def compute_area(curve, absolute = True):
         return abs(area)
     return area
 
+def compute_area_stokes(curve, absolute = True):
+    """
+    Compute the area enclosed by a 2D curve using Stokes' theorem.
+    Parameters
+    ----------
+    curve : np.array
+        An array of shape (N, 2) where N is the number of points.
+    absolute : bool
+        If True, return the absolute value of the area.
+    Returns
+    -------
+    area : float
+        The area enclosed by the curve.
+    """
+    N = curve.shape[0]
+    area = 0
+    for i in range (N-1):
+        area += curve[i,0]*(curve[i+1,1] - curve[i,1])
+    if absolute:
+        return abs(area)
+    return area
+
 def compute_length(curve):
     """ Compute the length of a 2D curve.
     Parameters
@@ -262,6 +284,7 @@ if __name__ == "__main__":
     naive_area = compute_area(naive_curve)
     cen_of_mass = compute_center_of_mass(naive_curve)
     print("Area:", naive_area)
+    print("Area Stokes:", compute_area_stokes(naive_curve))
     print("Length:", compute_length(naive_curve))
     print(naive_curve)
     print("Center of Mass:", cen_of_mass)
