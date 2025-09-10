@@ -193,7 +193,7 @@ def reparametrize_by_arc_length(curve, N, normalized = True):
         arc_length_parametrized_curve[:, i] = interp1d(cumdelta, curve[:, i], kind="linear", fill_value="extrapolate")(newdelta)
     return newdelta,arc_length_parametrized_curve
 
-def projection_clock_20(curve):
+def projection_clock_20(curve, number_of_angles = 20):
     """
     Project a 2D curve onto a clock parameterization with a = 20.
     Parameters
@@ -208,7 +208,6 @@ def projection_clock_20(curve):
 
     nb_frames, dim = curve.shape
     curve2 = gs.zeros((nb_frames, dim))
-    a = 20 #This should be an Hyperparam.
     N = nb_frames
 
     newdelta, curve2 = reparametrize_by_arc_length(curve, nb_frames)    
@@ -228,13 +227,13 @@ def projection_clock_20(curve):
 
     angles = extract_angle_sequence(unite_curve)
     
-    indices = extract_uniform_angles(a, angles) #Indixes of the curve points closest to the uniform angles
+    indices = extract_uniform_angles(number_of_angles, angles) #Indixes of the curve points closest to the uniform angles
     
     for k in range(len(indices) - 1):
         argument = newdelta[indices[k]:indices[k + 1] + 1] #Taking a portion of the uniform param.
 
         # Create uniform subdivision
-        unif_subset = int(np.floor(N/a))
+        unif_subset = int(np.floor(N/number_of_angles))
         newdel2 = np.linspace(argument[0], argument[-1], num = unif_subset)
         clock_parametrized_function_a = gs.zeros((nb_frames, dim))
         # Interpolate for each dimension
@@ -253,7 +252,7 @@ def projection_clock_20(curve):
             color=colorbar_rainbow(k / (len(indices) - 1)))
         #Adding lines for the subsections
         plt.plot([0,clock_parametrized_function_a[( k ) * unif_subset, 0]],[0,clock_parametrized_function_a[( k ) * unif_subset, 1]],'k--')
-    plt.title(f'Clock parameterization with a = {a}')
+    plt.title(f'Clock parameterization with number of angles = {number_of_angles}')
     plt.axis('equal')
     plt.show()
     return angles
@@ -363,4 +362,4 @@ if __name__ == "__main__":
     plt.tight_layout()
     plt.show()
 
-    ang = projection_clock_20(curve)
+    ang = projection_clock_20(curve, number_of_angles = 12)
