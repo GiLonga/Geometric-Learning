@@ -173,7 +173,7 @@ def reparametrize_by_arc_length(curve, N, normalized = True):
         arc_length_parametrized_curve[:, i] = interp1d(cumdelta, curve[:, i], kind="linear", fill_value="extrapolate")(newdelta)
     return newdelta,arc_length_parametrized_curve
 
-def projection_clock(curve, number_of_angles = 20, lmbda = None):
+def projection_clock(curve, number_of_angles = 20, lmbda = None, visualize = False):
     """
     Project a 2D curve onto a clock parameterization with a = 20.
     Parameters
@@ -203,13 +203,7 @@ def projection_clock(curve, number_of_angles = 20, lmbda = None):
     # If the point at 1/4 is on the right, flip the curve, can I check just the first point? Or withthe Area?
     if curve3[int(np.ceil(nb_frames/4)) - 1, 0] > 0:
         curve3 = np.flipud(curve3)
-
-    #Normalizing the distances from the center (center of mass (0,0)) to each point to 1
-    unite_curve = gs.zeros((nb_frames, dim))
-    for i in range(nb_frames):
-        unite_curve[i,:] = curve3[i,:] /(gs.linalg.norm(curve3[i,:]))
-
-    angles = extract_angle_sequence(unite_curve)
+    angles = extract_angle_sequence(curve3)
     indices = extract_uniform_angles(number_of_angles, angles) #Indixes of the curve points closest to the unif ang
 
     for k in range(len(indices) - 1):
@@ -228,18 +222,20 @@ def projection_clock(curve, number_of_angles = 20, lmbda = None):
 
 
         # Plot the second coordinate
-        plt.plot(
-            clock_param_fun_a[(k) * unif_subset: ( k + 1 ) * unif_subset, 0], 
-            clock_param_fun_a[(k) * unif_subset: ( k + 1 ) * unif_subset, 1],
-            '*',
-            color=colorbar_rainbow(k / (len(indices) - 1)))
-        #Adding lines for the subsections
-        plt.plot([0,clock_param_fun_a[( k ) * unif_subset, 0]],
-                 [0,clock_param_fun_a[( k ) * unif_subset, 1]],
-                 'k--')
-    plt.title(f'Clock parameterization with number of angles = {number_of_angles}')
-    plt.axis('equal')
-    plt.show()
+        if visualize:
+            plt.plot(
+                clock_param_fun_a[(k) * unif_subset: ( k + 1 ) * unif_subset, 0], 
+                clock_param_fun_a[(k) * unif_subset: ( k + 1 ) * unif_subset, 1],
+                '*',
+                color=colorbar_rainbow(k / (len(indices) - 1)))
+            #Adding lines for the subsections
+            plt.plot([0,clock_param_fun_a[( k ) * unif_subset, 0]],
+                    [0,clock_param_fun_a[( k ) * unif_subset, 1]],
+                    'k--')
+    if visualize:
+        plt.title(f'Clock parameterization with number of angles = {number_of_angles}')
+        plt.axis('equal')
+        plt.show()
 
     clock_param_fun_a_lambda = gs.zeros((clock_param_fun_a.shape[0],dim))
     if lmbda is not None:
@@ -248,18 +244,23 @@ def projection_clock(curve, number_of_angles = 20, lmbda = None):
             argument = newdelta[indices[k]:indices[k + 1] + 1]
             newdel2 = np.linspace(argument[0], argument[-1], num = unif_subset)
             clock_param_fun_a_lambda[(k)*unif_subset:(k+1)*unif_subset], _, _ = projection_prop_curv_lambda_length_in_R2(curve3[indices[k]:indices[k + 1]], unif_subset, lmbda, normalized = True)
-            plt.plot(
-            clock_param_fun_a_lambda[(k) * unif_subset: ( k + 1 ) * unif_subset, 0], 
-            clock_param_fun_a_lambda[(k) * unif_subset: ( k + 1 ) * unif_subset, 1],
-            '*',
-            color=colorbar_rainbow(k / (len(indices) - 1)))
-        #Adding lines for the subsections
-            plt.plot([0,clock_param_fun_a_lambda[( k ) * unif_subset, 0]],[0,clock_param_fun_a_lambda[( k ) * unif_subset, 1]],'k--')
-        plt.title(f'Clock parameterization with number of angles = {number_of_angles} and lambda = {lmbda}')
-        plt.axis('equal')
-        plt.show()
+            if visualize:
+                plt.plot(
+                clock_param_fun_a_lambda[(k) * unif_subset: ( k + 1 ) * unif_subset, 0], 
+                clock_param_fun_a_lambda[(k) * unif_subset: ( k + 1 ) * unif_subset, 1],
+                '*',
+                color=colorbar_rainbow(k / (len(indices) - 1)))
+            #Adding lines for the subsections
+                plt.plot(
+                    [0,clock_param_fun_a_lambda[( k ) * unif_subset, 0]],
+                    [0,clock_param_fun_a_lambda[( k ) * unif_subset, 1]],
+                    'k--')
+        if visualize:
+            plt.title(f'Clock parameterization with number of angles = {number_of_angles} and lambda = {lmbda}')
+            plt.axis('equal')
+            plt.show()
 
-    return angles
+    return clock_param_fun_a,clock_param_fun_a_lambda
 
 def extract_uniform_angles(a, angles):
     """ Extract indices corresponding to uniform angles in a 2D curve.
@@ -283,14 +284,14 @@ def extract_uniform_angles(a, angles):
     
     j = 0
     for i in range(1, nb_frames-1, 1):
-        if np.max(angles[:i]) > angles_uniform[j]:
+        if np.max(angles[:i]) > angles_uniform[j] and np.max(angles[:i]) < 2*np.pi:
             indices[j+1] = i
             j += 1
 
     indices[j+1] = nb_frames
     return indices
 
-def extract_angle_sequence(unite_curve):
+def extract_angle_sequence(curve):
     """ Extract a sequence of angles from a 2D curve.
     Parameters
     ----------
@@ -301,7 +302,10 @@ def extract_angle_sequence(unite_curve):
     angles : np.array
         An array of shape (nb_frames,) representing the angles of the curve.
     """
-    nb_frames= unite_curve.shape[0]
+    nb_frames, dim = curve.shape
+    unite_curve = gs.zeros((nb_frames, dim))
+    for i in range(nb_frames):
+        unite_curve[i,:] = curve[i,:] /(gs.linalg.norm(curve[i,:]))
     n = gs.zeros(2)
     # Compute the sequence of angles
     angles = gs.zeros(nb_frames)
@@ -379,4 +383,4 @@ if __name__ == "__main__":
     new_curve, curvdel, signed_curvature = projection_prop_curv_lambda_length_in_R2(curve, N_output, lmbda)
     curvature_plot(f, new_curve, curvdel, signed_curvature)
 
-    ang = projection_clock(curve, number_of_angles = 12, lmbda = lmbda)
+    _,_ = projection_clock(curve, number_of_angles = 12, lmbda = lmbda)
