@@ -1,4 +1,5 @@
 import geomstats.backend as gs
+import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 
@@ -41,6 +42,22 @@ def compute_length(curve):
     for i in range(curve.shape[0]-1):
         length += gs.linalg.norm(curve[i+1,:]-curve[i,:])
     return length
+
+def get_max_y_and_roll(curve2):
+    """
+    Find the index with the max y-coord in a 2D curve and roll the curve so that this point is first.
+    Parameters
+    ----------
+    curve2 : np.array
+        An array of shape (N, 2) where N is the number of points.
+    Returns
+    -------
+    curve2 : np.array
+        The curve rolled so that the point with the maximum y-coordinate is first.
+    """
+    max_y_coord = gs.argmax(curve2[:,1])
+    curve2 = np.roll(curve2, -max_y_coord, axis=0)
+    return curve2
 
 def compute_center_of_mass(curve):
     """ Compute the center of mass of a 2D curve.

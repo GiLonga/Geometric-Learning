@@ -1,5 +1,5 @@
 import geomstats.backend as gs
-from utils import compute_length, get_max_y, translate_center_of_mass, rotate_ellipse, compute_area, rotate_ellipse_surface, rotate_axis
+from utils import compute_length, get_max_y, translate_center_of_mass, rotate_ellipse, compute_area, rotate_ellipse_surface, rotate_axis, get_max_y_and_roll
 from  scipy.interpolate import interp1d
 from matplotlib import pyplot as plt
 import numpy as np
@@ -186,8 +186,7 @@ def projection_clock_20(curve):
     newdelta = gs.linspace(0,1, nb_frames) #uniform parameterization
     for i in range(dim):
         curve2[:,i] = interp1d(cumdelta, curve[:,i], kind="linear", fill_value="extrapolate")(newdelta)
-    I = gs.argmax(curve2[:,1])
-    curve2 = np.roll(curve2, -I, axis=0)
+    curve2 = get_max_y_and_roll(curve2)
     area = compute_area(curve2)
     curve2 = translate_center_of_mass(curve2)
     curve3 = curve2/np.sqrt(np.abs(area))
@@ -253,6 +252,8 @@ def projection_clock_20(curve):
     plt.axis('equal')
     plt.show()
     return angles
+
+
 
 
 
