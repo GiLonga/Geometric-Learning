@@ -7,6 +7,7 @@ from visualize import colorbar_rainbow
 
 def proj_clock_etapesbis(curve, N, a, lmbda):
     """ TO DO """
+    #STUBB
     nb_frames, dim = curve.shape
     param2 = gs.zeros((nb_frames, dim))
     clock_parametrized_function_a = gs.zeros((nb_frames, dim))
@@ -53,15 +54,7 @@ def proj_clock_etapesbis(curve, N, a, lmbda):
     indices = gs.linspace(0, nb_frames-1, a, dtype=int)
 
 
-    for k in range(len(indices)-1):
-        seg = param3[indices[k]:indices[k+1]+1]
-        clock_parameterized_a_lambda[
-        k * (N//(a-1)):(k+1) * (N//(a-1))
-        ] = projection_prop_curv_lambda_length_in_R2(seg, N//(a-1), lam)
-
-
-    clock_parameterized_a_lambda[-1] = f3[-1]
-    etape5 = clock_parameterized_a_lambda
+    pass
 
 
     return True
@@ -69,7 +62,7 @@ def proj_clock_etapesbis(curve, N, a, lmbda):
     #etape2_gravity, etape3_length, etape3_area,
     #etape4_ellipse, etape4_ellipse_surface, etape4, etape5)
 
-def projection_prop_curv_lambda_length_in_R2(curve, N, lmbda = None):
+def projection_prop_curv_lambda_length_in_R2(curve, N, lmbda = None, normalized = False ):
     """ Project a 2D curve onto a new parameterization proportional to its curvature and length.
     Parameters
     ----------
@@ -90,7 +83,7 @@ def projection_prop_curv_lambda_length_in_R2(curve, N, lmbda = None):
 
     # --- First Step: Arc Length Parameterization ---
     length = compute_length(curve)
-    newdelta, arc_length_parametrized_curve = reparametrize_by_arc_length(curve, N, normalized = False)
+    newdelta, arc_length_parametrized_curve = reparametrize_by_arc_length(curve, N, normalized = normalized)
 
     # --- Step 2: Second derivative (curvature numerator)
     f_seconde = gs.zeros(arc_length_parametrized_curve.shape)
@@ -103,7 +96,7 @@ def projection_prop_curv_lambda_length_in_R2(curve, N, lmbda = None):
 
     curvature = gs.linalg.norm(f_seconde, axis = 1 ) #Curvature = increment of the velocity vect
     curvedelta = gs.zeros(N)
-    
+
     # --- Step 3: Curvature-weighted arc length ---
     if lmbda is None:
         weights = curvature
@@ -145,19 +138,6 @@ def projection_prop_curv_lambda_length_in_R2(curve, N, lmbda = None):
         signed_curvature_arclength[s] = sign*curvature[s]
     signed_curvature_arclength = interp1d(curvedelta, signed_curvature_arclength,  kind='cubic', fill_value="extrapolate")(newcurvedelta)
 
-    #STUBB
-    #plt.plot(curve[:,0], curve[:,1], 'r-')
-    #plt.plot(arc_length_parametrized_curve[:,0], arc_length_parametrized_curve[:,1], 'y*')
-    #plt.plot(function_parametrized_prop_to_curv_arc_length[:,0], function_parametrized_prop_to_curv_arc_length[:,1], 'b*')
-    #plt.title('Arc length parameterization')
-    #plt.axis('equal')
-    #plt.show()
-
-    #plt.plot(curvature, 'k-')
-    #plt.title('Curvature')
-    #plt.axis('equal')
-    #plt.show()
-
     return function_parametrized_prop_to_curv_arc_length, curvedelta, signed_curvature_arclength
 
 def reparametrize_by_arc_length(curve, N, normalized = True):
@@ -193,7 +173,7 @@ def reparametrize_by_arc_length(curve, N, normalized = True):
         arc_length_parametrized_curve[:, i] = interp1d(cumdelta, curve[:, i], kind="linear", fill_value="extrapolate")(newdelta)
     return newdelta,arc_length_parametrized_curve
 
-def projection_clock_20(curve, number_of_angles = 20, lmbda = None):
+def projection_clock(curve, number_of_angles = 20, lmbda = None):
     """
     Project a 2D curve onto a clock parameterization with a = 20.
     Parameters
@@ -230,9 +210,8 @@ def projection_clock_20(curve, number_of_angles = 20, lmbda = None):
         unite_curve[i,:] = curve3[i,:] /(gs.linalg.norm(curve3[i,:]))
 
     angles = extract_angle_sequence(unite_curve)
-    
-    indices = extract_uniform_angles(number_of_angles, angles) #Indixes of the curve points closest to the uniform angles
-    
+    indices = extract_uniform_angles(number_of_angles, angles) #Indixes of the curve points closest to the unif ang
+
     for k in range(len(indices) - 1):
         argument = newdelta[indices[k]:indices[k + 1] + 1] #Taking a portion of the uniform param.
 
@@ -255,7 +234,9 @@ def projection_clock_20(curve, number_of_angles = 20, lmbda = None):
             '*',
             color=colorbar_rainbow(k / (len(indices) - 1)))
         #Adding lines for the subsections
-        plt.plot([0,clock_param_fun_a[( k ) * unif_subset, 0]],[0,clock_param_fun_a[( k ) * unif_subset, 1]],'k--')
+        plt.plot([0,clock_param_fun_a[( k ) * unif_subset, 0]],
+                 [0,clock_param_fun_a[( k ) * unif_subset, 1]],
+                 'k--')
     plt.title(f'Clock parameterization with number of angles = {number_of_angles}')
     plt.axis('equal')
     plt.show()
@@ -266,7 +247,7 @@ def projection_clock_20(curve, number_of_angles = 20, lmbda = None):
             #seg = curve3[indices[k]:indices[k + 1] + 1]
             argument = newdelta[indices[k]:indices[k + 1] + 1]
             newdel2 = np.linspace(argument[0], argument[-1], num = unif_subset)
-            clock_param_fun_a_lambda[(k)*unif_subset:(k+1)*unif_subset], _, _ = projection_prop_curv_lambda_length_in_R2(curve3[indices[k]:indices[k + 1]], unif_subset, lmbda)#[0][:,0]
+            clock_param_fun_a_lambda[(k)*unif_subset:(k+1)*unif_subset], _, _ = projection_prop_curv_lambda_length_in_R2(curve3[indices[k]:indices[k + 1]], unif_subset, lmbda, normalized = True)
             plt.plot(
             clock_param_fun_a_lambda[(k) * unif_subset: ( k + 1 ) * unif_subset, 0], 
             clock_param_fun_a_lambda[(k) * unif_subset: ( k + 1 ) * unif_subset, 1],
@@ -335,31 +316,19 @@ def extract_angle_sequence(unite_curve):
             angles[i] = angles[i-1] - gs.arccos(gs.dot(unite_curve[i,:], unite_curve[i-1,:]))
     return angles
 
-
-
-######### MAIN ###########
-if __name__ == "__main__":
-    import scipy.io
-    PATH = r"C:\Users\LONGA\Downloads\leaves_parameterized.mat"
-    #path = #INSERT THE PATH TO YOUR DATA
-    A = scipy.io.loadmat(PATH)
-    leaves = A['leaves_parameterized']
-    curve = leaves[75,:,:]
-    N_input = 200      # number of input samples
-    N_output = 300     # number of output samples for reparametrization
-    lmbda = 0.3 # balance between arc length and curvature
-
-    # Example curve: ellipse
-    t = np.linspace(0, 2*np.pi, N_input)
-    a, b = 3.0, 1.0
-    x = a * np.cos(t)
-    y = b * np.sin(t)
-    #curve = np.column_stack([x, y])
-    f = curve
-    # Call the function
-    new_curve, curvdel, signed_curvature = projection_prop_curv_lambda_length_in_R2(curve, N_output, lmbda)
-
-    # --- Visualization ---
+def curvature_plot(f, new_curve, curvdel, signed_curvature):
+    """ Plot the original curve, reparameterized curve, curvature-weighted arc-length parameter, and signed curvature.
+        Parameters
+    ----------
+    f : np.array
+        Original curve of shape (N, 2).
+    new_curve : np.array
+        Reparameterized curve of shape (N, 2).
+    curvdel : np.array
+        Curvature-weighted arc-length parameter of shape (N,). 
+    signed_curvature : np.array
+        Signed curvature of shape (N,).
+    """
     fig, axs = plt.subplots(1, 3, figsize=(14, 4))
     fig.suptitle("Testing projection_prop_curv_lambda_length_in_R2", fontsize=14)
 
@@ -382,8 +351,32 @@ if __name__ == "__main__":
     axs[2].set_xlabel("Index")
     axs[2].set_ylabel("Signed curvature")
     axs[2].set_title("Signed curvature after reparametrization")
-
     plt.tight_layout()
     plt.show()
 
-    ang = projection_clock_20(curve, number_of_angles = 12, lmbda = lmbda)
+
+######### MAIN ###########
+
+if __name__ == "__main__":
+    import scipy.io
+    PATH = r"C:\Users\LONGA\Downloads\leaves_parameterized.mat"
+    #path = #INSERT THE PATH TO YOUR DATA
+    A = scipy.io.loadmat(PATH)
+    leaves = A['leaves_parameterized']
+    curve = leaves[75,:,:]
+    N_input = 200 
+    N_output = 300
+    lmbda = 50
+
+    # Example curve: ellipse
+    t = np.linspace(0, 2*np.pi, N_input)
+    a, b = 3.0, 1.0
+    x = a * np.cos(t)
+    y = b * np.sin(t)
+    #curve = np.column_stack([x, y])
+    f = curve
+
+    new_curve, curvdel, signed_curvature = projection_prop_curv_lambda_length_in_R2(curve, N_output, lmbda)
+    curvature_plot(f, new_curve, curvdel, signed_curvature)
+
+    ang = projection_clock(curve, number_of_angles = 12, lmbda = lmbda)
