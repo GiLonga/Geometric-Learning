@@ -1,5 +1,5 @@
 import geomstats.backend as gs
-from utils import compute_length, get_max_y, translate_center_of_mass, rotate_ellipse, compute_area, rotate_ellipse_surface, rotate_axis, get_max_y_and_roll
+from utils import compute_length, get_max_y, translate_center_of_mass, rotate_ellipse, compute_area, rotate_ellipse_surface, rotate_axis, get_max_y_and_roll, check_and_shift_center_of_mass
 from  scipy.interpolate import interp1d
 from matplotlib import pyplot as plt
 import numpy as np
@@ -199,9 +199,11 @@ def projection_clock(curve, number_of_angles = 20, lmbda = None, visualize = Fal
     area = compute_area(curve2)
     curve2 = translate_center_of_mass(curve2)
     curve3 = curve2/np.sqrt(np.abs(area))
+    curve3 = check_and_shift_center_of_mass(curve3)
 
     # If the point at 1/4 is on the right, flip the curve, can I check just the first point? Or withthe Area?
-    if curve3[int(np.ceil(nb_frames/4)) - 1, 0] > 0:
+
+    if compute_area(curve3, absolute = False) < 0: 
         curve3 = np.flipud(curve3)
     angles = extract_angle_sequence(curve3)
     indices = extract_uniform_angles(number_of_angles, angles) #Indixes of the curve points closest to the unif ang

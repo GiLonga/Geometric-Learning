@@ -2,6 +2,10 @@ import geomstats.backend as gs
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
+import os
+import scipy.io
+import matplotlib.path as mpltPath
+
 
 
 def compute_area(curve, absolute = True):
@@ -279,21 +283,64 @@ def rotate_ellipse_surface(curve):
         rotated_curve[i,:] = rot90 @ V @ curve[i,:].T
     return rotated_curve
 
+def check_and_shift_center_of_mass(naive_curve):
+    """
+    Check if the center of mass of a 2D curve is inside the shape and shift the curve if necessary.
+    Parameters
+    ----------
+    naive_curve : np.array
+        An array of shape (N, 2) where N is the number of points.
+    Returns
+    -------
+    naive_curve : np.array
+        The curve shifted if the center of mass was not in the shape.
+        In other case the same curve.
+    """
+    
+    check = mpltPath.Path(naive_curve)
+    inside2 = check.contains_points(np.array( [[0,0],[0,0]]) )
+    if not inside2[0]:
+        distances = np.linalg.norm(naive_curve - np.array([0,0]), axis=1)
+        idx = np.argmin(distances)
+        if naive_curve[idx][0] > 0:
+            naive_curve[:,0] = naive_curve[:,0] - naive_curve[idx][0] - 0.001
+        else:
+            naive_curve[:,0] = naive_curve[:,0] - naive_curve[idx][0] + 0.001
+        if naive_curve[idx][1] > 0:
+            naive_curve[:,1] = naive_curve[:,1] - naive_curve[idx][1] - 0.001
+        else:
+            naive_curve[:,1] = naive_curve[:,1] - naive_curve[idx][1] + 0.001
+        print( "The curve has been shifted to include the old center of mass in the shape")
+    return naive_curve
+
 if __name__ == "__main__":
-    naive_curve = gs.array([[0,0],[0,1],[2,1],[2,0], [0,0]])
-    naive_area = compute_area(naive_curve)
-    cen_of_mass = compute_center_of_mass(naive_curve)
-    print("Area:", naive_area)
-    print("Area Stokes:", compute_area_stokes(naive_curve))
-    print("Length:", compute_length(naive_curve))
-    print(naive_curve)
-    print("Center of Mass:", cen_of_mass)
-    print("Translated:\n", translate_center_of_mass(naive_curve))
-    print("Max y point index and translated:\n", get_max_y(naive_curve))
-    r_curve = rotate_ellipse(naive_curve)
-    print("Rotated ellipse:\n",r_curve )
-    plt.plot(naive_curve[:,0], naive_curve[:,1], 'r-')
-    plt.plot(r_curve[:,0], r_curve[:,1], 'b-')
-    plt.plot(cen_of_mass[0], cen_of_mass[1], 'ro')  # Mark center of mass
-    plt.axis('equal')
-    plt.show()
+
+    workspace_path = os.getcwd()
+    path = os.path.join(workspace_path, 'training_set.mat')
+    A = scipy.io.loadmat(path)
+    training_leaves = A['etape4']
+    for i in (449, 450, 451, 501):
+        naive_curve = training_leaves[i]
+        naive_area = compute_area(naive_curve)
+        cen_of_mass = compute_center_of_mass(naive_curve)
+        plt.plot(naive_curve[:,0], naive_curve[:,1], 'r-')
+        plt.plot(0.0,0.0, 'gx')
+        plt.plot(cen_of_mass[0], cen_of_mass[1], 'bx')  # Mark center of mass
+        print("Area:", naive_area)
+        print("Area Stokes:", compute_area_stokes(naive_curve))
+        check_and_shift_center_of_mass(naive_curve)          
+
+        #print("Length:", compute_length(naive_curve))
+        #print(naive_curve)
+        #print("Center of Mass:", cen_of_mass)
+        #print("Translated:\n", translate_center_of_mass(naive_curve))
+        #print("Max y point index and translated:\n", get_max_y(naive_curve))
+        #r_curve = rotate_ellipse(naive_curve)
+        #print("Rotated ellipse:\n",r_curve )
+        plt.plot(naive_curve[:,0], naive_curve[:,1], 'y-')
+        plt.plot(0.0,0.0, 'gx')
+        plt.plot(cen_of_mass[0], cen_of_mass[1], 'bx')  # Mark center of mass
+        #plt.plot(r_curve[:,0], r_curve[:,1], 'b-')
+        plt.title(f'Leaf {i}')
+        plt.axis('equal')
+        plt.show()
