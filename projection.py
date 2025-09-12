@@ -1,5 +1,5 @@
 import geomstats.backend as gs
-from utils import compute_length, get_max_y, translate_center_of_mass, rotate_ellipse, compute_area, rotate_ellipse_surface, rotate_axis, get_max_y_and_roll, check_and_shift_center_of_mass
+from utils import compute_length, get_max_y, translate_center_of_mass, rotate_ellipse, compute_area, rotate_ellipse_surface, rotate_axis, get_max_y_and_roll, check_and_shift_center_of_mass, compute_center_of_mass
 from  scipy.interpolate import interp1d
 from matplotlib import pyplot as plt
 import numpy as np
@@ -62,6 +62,151 @@ def proj_clock_etapesbis(curve, N, a, lmbda):
     #etape2_gravity, etape3_length, etape3_area,
     #etape4_ellipse, etape4_ellipse_surface, etape4, etape5)
 
+def projection_clock_a_lmbda(curve, n_subdivision = 12, lmbda = None, visualize = False):
+    """
+    Compute the clock parametrization (with optional λ-weight) of a closed curve.
+
+    This function takes a discrete curve in R^2 (or higher dimension) and reparametrizes it 
+    using a "clock parametrization" approach. The curve is subdivided into approximately 
+    equal angular segments, and each segment is linearly interpolated over a uniform 
+    parameter grid. Optionally, a λ-dependent projection is applied to each segment to 
+    produce an additional parametrization taking in account the curvature.
+
+    Parameters
+    ----------
+    curve : ndarray of shape (M, dim)
+        The input discrete curve, given as an ordered sequence of points.
+        Typically dim = 2 for planar curves.
+    n_subdivision : int, default=12
+        Number of angular subdivisions used to partition the curve.
+    lmbda : float or None, default=None
+        If provided, computes an additional λ-weighted curvature projected parametrization. 
+        If None, only the standard clock parametrization is returned.
+
+    Returns
+    -------
+    clock_param_fun_a : ndarray of shape (N, dim)
+        The curve reparametrized using the clock parametrization.
+    clock_param_fun_a_lambda : ndarray of shape (N, dim), optional
+        The λ-projected version of the clock parametrization. 
+        Returned only if `lmbda` is not None.
+
+    Notes
+    -----
+    - The curve is first recentered to remove translation effects via 
+      `check_and_shift_center_of_mass`.
+    - If the curve orientation is clockwise (negative area), it is flipped 
+      to ensure counter-clockwise orientation.
+    - Subdivision indices are chosen based on uniform angular sampling 
+      of the curve.
+    """
+    n_frame, dim = curve.shape
+    newdelta = np.linspace(0,1,n_frame)
+    fixed_curve = check_and_shift_center_of_mass(curve)
+    if compute_area(fixed_curve, absolute = False) < 0: 
+        fixed_curve = np.flipud(fixed_curve)
+    angles = extract_angle_sequence(fixed_curve)
+    indices = extract_uniform_angles(n_subdivision, angles) #Indixes of the curve points closest to the unif ang
+    clock_param_fun_a = gs.zeros((n_frame, dim))
+    clock_param_fun_a_lambda = gs.zeros((n_frame, dim))
+    for k in range(len(indices) - 1):
+        argument = newdelta[indices[k]:indices[k + 1] + 1] #Taking a portion of the uniform param.
+
+        # Create uniform subdivision
+        unif_subset = int(np.floor(n_frame/n_subdivision))
+        newdel2 = np.linspace(argument[0], argument[-1], num = unif_subset)
+        #Calculating the parametrizations
+        for d in range(dim):
+            portion_of_x_or_y = fixed_curve[indices[k]:indices[k + 1] + 1, d]
+            f_interp = interp1d(argument, portion_of_x_or_y, kind='linear')
+            clock_param_fun_a[(k)*unif_subset:(k+1)*unif_subset, d] = f_interp(newdel2)
+        
+        if lmbda is not None:
+                portion_of_x_and_y = fixed_curve[indices[k]:indices[k + 1] + 1, :]
+                clock_param_fun_a_lambda[(k)*unif_subset:(k+1)*unif_subset, :] = reparametrize_by_curvature(portion_of_x_and_y, lmbda, unif_subset)
+                if visualize:
+                    plt.plot(
+                    clock_param_fun_a_lambda[(k) * unif_subset: ( k + 1 ) * unif_subset, 0], 
+                    clock_param_fun_a_lambda[(k) * unif_subset: ( k + 1 ) * unif_subset, 1],
+                    '*',
+                    color=colorbar_rainbow(k / (len(indices) - 1)))
+                #Adding lines for the subsections
+                    plt.plot(
+                        [0,clock_param_fun_a_lambda[( k ) * unif_subset, 0]],
+                        [0,clock_param_fun_a_lambda[( k ) * unif_subset, 1]],
+                        'k--')
+    if visualize:
+        plt.title(f'Clock parameterization with number of angles = {n_subdivision} and lambda = {lmbda}')
+        plt.axis('equal')
+        plt.show()
+    if lmbda is None:
+        return clock_param_fun_a
+    else:
+        return clock_param_fun_a, clock_param_fun_a_lambda
+
+def reparametrize_by_curvature(curve, lmbda = 1, unif_subset = 12):
+    """
+    Reparametrize a curve segment proportionally to curvature and arc length.
+
+    This function redistributes points along a curve segment such that regions of 
+    high curvature are sampled more densely. The parameter λ controls the trade-off 
+    between arc-length uniformity and curvature sensitivity.
+
+    Parameters
+    ----------
+    curve : ndarray of shape (M, dim)
+        Discrete curve segment as an ordered sequence of M points in `dim` dimensions.
+    lmbda : float or None, default=1
+        Weighting parameter:
+        - If None, parametrization is based purely on curvature.
+        - If float, parametrization weights arc length (scaled by λ) in 
+          addition to curvature.
+
+    Returns
+    -------
+    function_parametrized_prop_to_curv_arc_length : ndarray of shape (M, dim)
+        The reparametrized curve segment, redistributed according to curvature 
+        and arc length.
+
+    Notes
+    -----
+    - Curvature is approximated via finite differences of the second derivative.
+    - The weight function is defined as:
+        * curvature (if `lmbda` is None)
+        * λ * length + curvature (otherwise)
+    - Cubic interpolation is applied to resample the segment.
+    """
+    portion_of_N, dim = curve.shape
+    length = compute_length(curve)
+    newdelta = np.linspace(0,1,portion_of_N)
+    f_seconde = gs.zeros(curve.shape)
+    for i in range(2):
+        for j in range (1,portion_of_N-1, 1):
+            f_seconde[j,i] = (
+                curve[j+1,i] - 2*curve[j,i] + curve[j-1,i])*(gs.power((portion_of_N-1),2)/(length**2))
+        f_seconde[0,i] = 0
+        f_seconde[-1,i] = 0
+
+    curvature = gs.linalg.norm(f_seconde, axis = 1 ) #Curvature = increment of the velocity vect
+    curvedelta = gs.zeros(portion_of_N)
+
+    if lmbda is None:
+        weights = curvature
+    else:
+        weights = lmbda*length + curvature
+
+    total_curve_arc_length = np.trapz(weights, newdelta)
+    for s in range(1,portion_of_N,1):
+        curvedelta[s-1] = np.trapz( weights[:s], newdelta[:s]) / total_curve_arc_length
+    curvedelta[-1] = 1.0
+    newcurvedelta = gs.linspace(0,1,unif_subset)
+    function_parametrized_prop_to_curv_arc_length = gs.zeros((unif_subset, dim))
+    for i in range(dim):
+        inter_func2 = interp1d(curvedelta, curve[:,i], kind='cubic', fill_value="extrapolate")
+        function_parametrized_prop_to_curv_arc_length[:,i]  = inter_func2(newcurvedelta)
+
+    return function_parametrized_prop_to_curv_arc_length
+
 def projection_prop_curv_lambda_length_in_R2(curve, N, lmbda = None, normalized = False ):
     """ Project a 2D curve onto a new parameterization proportional to its curvature and length.
     Parameters
@@ -78,7 +223,7 @@ def projection_prop_curv_lambda_length_in_R2(curve, N, lmbda = None, normalized 
         An array of shape (N,) representing the signed curvature of the curve in the new parameterization.
     """
 
-    nb_frame, dim = curve.shape
+    _, dim = curve.shape
     assert dim == 2, "The input curve must be 2D."
 
     # --- First Step: Arc Length Parameterization ---
@@ -192,14 +337,14 @@ def projection_clock(curve, number_of_angles = 20, lmbda = None, visualize = Fal
 
     nb_frames, dim = curve.shape
     curve2 = gs.zeros((nb_frames, dim))
-    N = nb_frames
+    N = nb_frames*3
 
-    newdelta, curve2 = reparametrize_by_arc_length(curve, nb_frames)    
+    newdelta, curve2 = reparametrize_by_arc_length(curve, N)    
     curve2 = get_max_y_and_roll(curve2)
     area = compute_area(curve2)
     curve2 = translate_center_of_mass(curve2)
     curve3 = curve2/np.sqrt(np.abs(area))
-    curve3 = check_and_shift_center_of_mass(curve3)
+    curve3 = check_and_shift_center_of_mass(curve3, verbose = visualize)
 
     # If the point at 1/4 is on the right, flip the curve, can I check just the first point? Or withthe Area?
 
@@ -214,7 +359,7 @@ def projection_clock(curve, number_of_angles = 20, lmbda = None, visualize = Fal
         # Create uniform subdivision
         unif_subset = int(np.floor(N/number_of_angles))
         newdel2 = np.linspace(argument[0], argument[-1], num = unif_subset)
-        clock_param_fun_a = gs.zeros((nb_frames, dim))
+        clock_param_fun_a = gs.zeros((N, dim))
         # Interpolate for each dimension
 
         for d in range(dim):
@@ -369,7 +514,7 @@ if __name__ == "__main__":
     #path = #INSERT THE PATH TO YOUR DATA
     A = scipy.io.loadmat(PATH)
     leaves = A['leaves_parameterized']
-    curve = leaves[75,:,:]
+    curve = leaves[677,:,:]
     N_input = 200 
     N_output = 300
     lmbda = 50
@@ -379,10 +524,10 @@ if __name__ == "__main__":
     a, b = 3.0, 1.0
     x = a * np.cos(t)
     y = b * np.sin(t)
-    #curve = np.column_stack([x, y])
+    #curve = np.column_stack([x, y])45
     f = curve
 
-    new_curve, curvdel, signed_curvature = projection_prop_curv_lambda_length_in_R2(curve, N_output, lmbda)
-    curvature_plot(f, new_curve, curvdel, signed_curvature)
+    #new_curve, curvdel, signed_curvature = projection_prop_curv_lambda_length_in_R2(curve, N_output, lmbda)
+    #curvature_plot(f, new_curve, curvdel, signed_curvature)
 
-    _,_ = projection_clock(curve, number_of_angles = 12, lmbda = lmbda)
+    _,_ = projection_clock(curve, number_of_angles = 4, lmbda = 1000, visualize = True)
