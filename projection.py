@@ -422,11 +422,12 @@ def extract_uniform_angles(a, angles):
     indices : np.array
         An array of shape (a+1,) representing the indices of the curve corresponding to uniform angles.
     """
+    a = a+1
     nb_frames = angles.shape[0]
     angles_uniform = gs.zeros(a)
     indices = gs.zeros(a, dtype=int)
     indices[0] = 0 # TOCHECK
-    for s in range(a-1):
+    for s in range(a):
         angles_uniform[s] = angles[0] + (s+1)* 2*np.pi/(a-1)
     
     j = 0
@@ -435,7 +436,7 @@ def extract_uniform_angles(a, angles):
             indices[j+1] = i
             j += 1
 
-    indices[j+1] = nb_frames
+    indices[j+1] = nb_frames-1
     return indices
 
 def extract_angle_sequence(curve):
@@ -514,7 +515,7 @@ if __name__ == "__main__":
     #path = #INSERT THE PATH TO YOUR DATA
     A = scipy.io.loadmat(PATH)
     leaves = A['leaves_parameterized']
-    curve = leaves[677,:,:]
+    curve = leaves[0,:,:]
     N_input = 200 
     N_output = 300
     lmbda = 50
@@ -526,7 +527,7 @@ if __name__ == "__main__":
     y = b * np.sin(t)
     #curve = np.column_stack([x, y])45
     f = curve
-
+    
     #new_curve, curvdel, signed_curvature = projection_prop_curv_lambda_length_in_R2(curve, N_output, lmbda)
     #curvature_plot(f, new_curve, curvdel, signed_curvature)
 
