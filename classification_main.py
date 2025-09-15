@@ -9,8 +9,11 @@ import os
 import scipy
 import matplotlib.pyplot as plt
 import seaborn as sns
+from visualize import clustering_visualization
+
 
 ########################################################## LEARNING CLASS #####################################################à
+
 def classifier(X_train, y_train, X_test, y_test, index):
 
     X_train = X_train.reshape(X_train.shape[0], -1)
@@ -115,6 +118,7 @@ for i in range(5):
     set_i = load_training_set(workspace_path, i+1)
     t_sets.append(set_i)
 
+
 for i in range(7):
     etape_name = f"etape{i}.npy"
     test_name = f"test_{i}.npy" 
@@ -122,6 +126,8 @@ for i in range(7):
     test = np.load(test_name)
     print (f" Etape number {i}")
     print( classifier(etape, labels_train, test, y_test, i))
+    tsne_X = clustering_visualization(etape,labels_train, i)
+
 
 print ("RAW DATA")
 print( classifier(training_leaves, labels_train, testing_leaves, y_test, 999))

@@ -1,7 +1,18 @@
 import geomstats.backend as gs
 import matplotlib.pyplot as plt
+from sklearn.manifold import TSNE
+from matplotlib import colormaps
 
-
+def clustering_visualization(X, Y, index = 0):
+    X = X.reshape(X.shape[0],-1)
+    X_embedded = TSNE(n_components=2, learning_rate='auto',
+                  init='random', perplexity=3).fit_transform(X)
+    for j in range(X_embedded.shape[0]):
+        plt.plot(X_embedded[j][0],X_embedded[j][1], '*', color=colormaps['hsv'](Y[j]/15))
+    plt.title(f"TSNE plot for the step{index}")
+    plt.axis('equal')
+    plt.show()
+    return X_embedded
 
     
 def colorbar_rainbow(u):
