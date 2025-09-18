@@ -5,6 +5,8 @@ from sklearn.decomposition import PCA
 import os
 import scipy.io
 import matplotlib.path as mpltPath
+from visualize import plot_curve
+#from projection import projection_clock_a_lmbda
 
 
 
@@ -48,7 +50,8 @@ def compute_area_stokes(curve, absolute = True):
     N = curve.shape[0]
     area = 0
     for i in range (N-1):
-        area += curve[i,0]*(curve[i+1,1] - curve[i,1])
+        area += curve[i,0]*(curve[i+1,1] - curve[i-1,1])/2
+    area += curve[N-1,0]*(curve[0,1] - curve[N-2,1])/2
     if absolute:
         return abs(area)
     return area
@@ -69,7 +72,7 @@ def compute_length(curve):
         length += gs.linalg.norm(curve[i+1,:]-curve[i,:])
     return length
 
-def get_max_y_and_roll(curve2):
+def get_max_y_and_roll(curve2, shift = True):
     """
     Find the index with the max y-coord in a 2D curve and roll the curve so that this point is first.
     Parameters
@@ -83,8 +86,11 @@ def get_max_y_and_roll(curve2):
     """
     max_y_coord = gs.argmax(curve2[:,1])
     rolled_curve = np.roll(curve2, -max_y_coord, axis=0)
-    rolled_shifted_curve = rolled_curve - curve2[max_y_coord]
-    return rolled_shifted_curve
+    if shift:     
+        rolled_shifted_curve = rolled_curve - curve2[max_y_coord]
+        return rolled_shifted_curve
+    else:
+        return rolled_curve
 
 def compute_center_of_mass(curve):
     """ Compute the center of mass of a 2D curve.
@@ -99,12 +105,12 @@ def compute_center_of_mass(curve):
     """
     cx = 0
     cy = 0
-    area = compute_area(curve)
+    area = compute_area(curve, absolute = False)
     for i in range(len(curve) - 1):
         integral_contribution_x = 0.5*gs.power(curve[i,0],2)*(curve[i+1,1]-curve[i,1])#Stokes' theorem
         integral_contribution_y = 0.5*gs.power(curve[i,1],2)*(curve[i+1,0]-curve[i,0])#Stokes' theorem
-        cx += (-integral_contribution_x ) / area
-        cy += ( integral_contribution_y ) / area
+        cx += (  integral_contribution_x ) / area
+        cy += (- integral_contribution_y ) / area
     return gs.array([cx, cy])
 
 def translate_center_of_mass(curve):
@@ -230,24 +236,27 @@ def rotate_curve_major_vertical(curve):
     Returns
     -------
     rotated_curve : np.ndarray, shape (N, 2)
-        Curve rotated.
+        Curve rotated (no translation).
     """
-    mean = gs.mean(curve, axis=0)
-    centered = curve - mean
+    # Perform PCA on the original (unshifted) curve
     pca = PCA(n_components=2)
-    pca.fit(centered)
+    pca.fit(curve)
     components = pca.components_
     variances = pca.explained_variance_
+
+    # Find major/minor axis
     major_idx = gs.argmax(variances)
     minor_idx = 1 - major_idx
+
+    # Build rotation matrix
     R = gs.vstack([components[minor_idx], components[major_idx]])
 
-    # Ensure right-handed orientation (det = +1)
+    # Ensure right-handed orientation
     if gs.linalg.det(R) < 0:
-        R[1, :] *= -1   # flip the major axis
+        R[1, :] *= -1
 
-    # Apply rotation
-    rotated_curve = centered @ R.T
+    # Apply rotation (no mean-centering)
+    rotated_curve = curve @ R.T
 
     return rotated_curve
 
@@ -284,45 +293,71 @@ def rotate_ellipse_surface(curve):
         rotated_curve[i,:] = rot90 @ V @ curve[i,:].T
     return rotated_curve
 
-def check_and_shift_center_of_mass(curve_to_check, verbose = False):
+def check_and_shift_center_of_mass(curve_to_check, tolerance=5e-4, verbose = False):
     """
-    Check if the center of mass of a 2D curve is inside the shape and shift the curve if necessary.
+    Shift a 2D curve (polygon) if necessary so that the origin (0,0) lies inside it,
+    with a safety tolerance from the border.
+
     Parameters
     ----------
-    naive_curve : np.array
-        An array of shape (N, 2) where N is the number of points.
+    curve : np.ndarray
+        Array of shape (N, 2), representing N 2D points of the polygon.
+    tolerance : float, optional
+        Minimum distance by which the origin should be pushed inside.
+        Default is 1e-3.
+    verbose : bool, optional
+        If True, plot debugging info. Default is False.
+
     Returns
     -------
-    naive_curve : np.array
-        The curve shifted if the center of mass was not in the shape.
-        In other case the same curve.
+    shifted_curve : np.ndarray
+        The curve, shifted if needed so that the origin lies safely inside.
     """
-    c_old = compute_center_of_mass(curve_to_check)
-    naive_curve = curve_to_check.copy()
-    check = mpltPath.Path(naive_curve)
-    inside2 = check.contains_points(np.array( [[0,0],[0,0]]) )
-    if not inside2[0]:
-        distances = np.linalg.norm(naive_curve - np.array([0,0]), axis=1)
-        idx = np.argmin(distances)
-        if naive_curve[idx][0] > 0:
-            naive_curve[:,0] = naive_curve[:,0] - naive_curve[idx][0]- 0.0005
-        else:
-            naive_curve[:,0] = naive_curve[:,0] - naive_curve[idx][0]+ 0.0005
-        if naive_curve[idx][1] > 0:
-            naive_curve[:,1] = naive_curve[:,1] - naive_curve[idx][1] 
-        else:
-            naive_curve[:,1] = naive_curve[:,1] - naive_curve[idx][1] 
-        if verbose:
-            print( "The curve has been shifted to include the old center of mass in the shape")
-            plt.plot(curve_to_check[:,0], curve_to_check[:,1], 'g*', label = 'original curve')
-            plt.plot(c_old[0],c_old[1], 'gx', label = 'Original CoM') # I expect that the Cen of Mass is translated with the curve
-            plt.plot([0],[0], 'yx') # But the origin remains in the same position, ipse dixit the old Cen of mass.
-            plt.plot(naive_curve[:,0], naive_curve[:,1], 'y', label= 'Shifted curve')
-            plt.plot([0, naive_curve[0,0]], [0, naive_curve[0,1]], 'y')
-            plt.legend()
-            plt.axis('equal')
-            plt.show()
-    return naive_curve
+    path = mpltPath.Path(curve_to_check)
+
+    # If origin already inside, no shift needed
+    if path.contains_point([0,0]):
+        return curve_to_check.copy()
+
+    # Find closest point to origin
+    distances = np.linalg.norm(curve_to_check, axis=1)
+    closest_point = curve_to_check[np.argmin(distances)]
+
+    # Shift vector toward origin, overshoot slightly
+    shift_vec = -closest_point
+    norm = np.linalg.norm(shift_vec)
+    if norm > 0:
+        shift_vec = shift_vec * (1 + tolerance / norm)
+
+    shifted_curve = curve_to_check + shift_vec
+
+    if verbose:
+        print(f"The curve was shifted so the origin lies inside (tolerance {tolerance}).")
+        plt.plot(curve_to_check[:,0], curve_to_check[:,1], 'g-', label='Original curve')
+        plt.plot([0],[0], 'rx', label='Origin')
+        plt.plot(shifted_curve[:,0], shifted_curve[:,1], 'y-', label='Shifted curve')
+        plt.axis('equal')
+        plt.legend()
+        plt.show()
+
+    return shifted_curve
+
+def scale_unit_area(curve_local : int = 0) -> np.array:
+        """
+        Scale a 2D curve so that the area it encloses is equal to one.
+        Parameters
+        ----------
+        curve : np.array
+            An array of shape (N, 2) where N is the number of points.
+        Returns
+        -------
+        scaled_curve : np.array
+            The curve scaled to unit area.
+        """
+        area = compute_area(curve_local)
+        scaled_curve = curve_local/np.sqrt(np.abs(area))
+
+        return scaled_curve
 
 def curve_unite_length(curve) -> np.array:
     """
@@ -354,17 +389,30 @@ if __name__ == "__main__":
     #path = #INSERT THE PATH TO YOUR DATA
     A = scipy.io.loadmat(PATH)
     training_leaves = A['leaves_parameterized']
+    #plot_curve(training_leaves[95])
+
+
     #curve = leaves[677,:,:]
-    for i in (677,): #453,453, 501):
+    for i in range(675,680,1): #453,453, 501):
         naive_curve = training_leaves[i]
-        naive_area = compute_area(naive_curve)
-        cen_of_mass = compute_center_of_mass(naive_curve)
-        plt.plot(naive_curve[:,0], naive_curve[:,1], 'k-')
+        #naive_area = compute_area(naive_curve)
+        
+        rotate_curve = rotate_curve_major_vertical(naive_curve)
+        rotate_curve = get_max_y_and_roll(rotate_curve)
+        rotate_curve = curve_unite_length(rotate_curve)
+        rotate_curve = translate_center_of_mass(rotate_curve)
+        rotate_curve = rotate_axis(rotate_curve)
+        #rotate_curve1, rotate_curve2 = projection_clock_a_lmbda(rotate_curve)
+        #rotate_curve = rotate_curve1
+        cen_of_mass = compute_center_of_mass(rotate_curve)
+
+        #plt.plot(naive_curve[:,0], naive_curve[:,1], 'k-')
+        plt.plot(rotate_curve[:,0], rotate_curve[:,1], 'g-')
         plt.plot(0.0,0.0, 'gx')
         plt.plot(cen_of_mass[0], cen_of_mass[1], 'bx')  # Mark center of mass
-        print("Area:", naive_area)
-        print("Area Stokes:", compute_area_stokes(naive_curve))
-        check_and_shift_center_of_mass(naive_curve, verbose=True)          
+        #print("Area:", naive_area)
+        #print("Area Stokes:", compute_area_stokes(naive_curve))
+        #check_and_shift_center_of_mass(naive_curve, verbose=True)          
 
         #print("Length:", compute_length(naive_curve))
         #print(naive_curve)
@@ -373,9 +421,9 @@ if __name__ == "__main__":
         #print("Max y point index and translated:\n", get_max_y(naive_curve))
         #r_curve = rotate_ellipse(naive_curve)
         #print("Rotated ellipse:\n",r_curve )
-        plt.plot(naive_curve[:,0], naive_curve[:,1], 'y-')
-        plt.plot(0.0,0.0, 'gx')
-        plt.plot(cen_of_mass[0], cen_of_mass[1], 'bx')  # Mark center of mass
+        #plt.plot(naive_curve[:,0], naive_curve[:,1], 'y-')
+        #plt.plot(0.0,0.0, 'gx')
+        #plt.plot(cen_of_mass[0], cen_of_mass[1], 'bx')  # Mark center of mass
         #plt.plot(r_curve[:,0], r_curve[:,1], 'b-')
         plt.title(f'Leaf {i}')
         plt.axis('equal')

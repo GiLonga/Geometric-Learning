@@ -79,3 +79,11 @@ def colorbar_rainbow(u):
     col = gs.stack([R, G, B], axis=-1)
     
     return col
+
+def plot_curve(curve):
+    """
+    Return the plot of the curve
+    """
+    plt.plot(curve[:,0], curve[:,1], "g-")
+    plt.axis('equal')
+    plt.show()
