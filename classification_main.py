@@ -20,7 +20,7 @@ def classifier(X_train, y_train, X_test, y_test, index):
     X_test  = X_test.reshape(X_test.shape[0], -1)
     classifiers = {
         "Logistic Regression": LogisticRegression(max_iter=2000, multi_class="auto"),
-        "Random Forest": RandomForestClassifier(n_estimators=200, random_state=42),
+        "Random Forest": RandomForestClassifier(n_estimators=100, random_state=42),
         "SVM (RBF kernel)": SVC(kernel="rbf", probability=True, random_state=42),
         "KNN (k=5)": KNeighborsClassifier(n_neighbors=5),
     }
@@ -99,10 +99,6 @@ workspace_path = os.getcwd()
 
 
 #################################################### MAIN #########
-
-n_subdivision = 4
-lmbda = 1000
-N = 2000
 labels_train = np.repeat(np.arange(15), 50)
 y_test = np.repeat(np.arange(15), 25)
 
@@ -131,3 +127,8 @@ for i in range(7):
 
 print ("RAW DATA")
 print( classifier(training_leaves, labels_train, testing_leaves, y_test, 999))
+
+#etape = np.load("etape01.npy")
+#test = np.load("test_01.npy")
+#print (f" ELLIPSE ROTATION")
+#print( classifier(etape, labels_train, test, y_test, i))
