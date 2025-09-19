@@ -5,7 +5,7 @@ from matplotlib import pyplot as plt
 import numpy as np
 from visualize import colorbar_rainbow
 import geomstats.backend as gs
-from utils import compute_length, translate_center_of_mass, compute_area, rotate_axis, get_max_y_and_roll, check_and_shift_center_of_mass
+from utils import compute_length, translate_center_of_mass, compute_area, rotate_axis, get_max_y_and_roll, check_and_shift_center_of_mass, check_shift_voronoi
 
 def projection_clock_a_lmbda(curve, n_subdivision = 12, lmbda = None, visualize = False):
     """
@@ -48,18 +48,23 @@ def projection_clock_a_lmbda(curve, n_subdivision = 12, lmbda = None, visualize 
     """
     n_frame, dim = curve.shape
     newdelta = np.linspace(0,1,n_frame)
-    #plt.plot(curve[:,0], curve[:,1], 'r-')
-    fixed_curve = check_and_shift_center_of_mass(curve, verbose = visualize)
-    #plt.plot(fixed_curve[:,0], fixed_curve[:,1], 'g-')
+    fixed_curve = check_shift_voronoi(curve, verbose = False)
     if compute_area(fixed_curve, absolute = False) < 0:
         fixed_curve = np.flipud(fixed_curve)
-    angles = extract_angle_sequence(fixed_curve)
-    indices = extract_uniform_angles(n_subdivision, angles) #Indixes of the curve points closest to the unif ang
-    #n_subdivision = n_subdivision + 1
+    if n_subdivision > 0:
+        angles = extract_angle_sequence(fixed_curve)
+        indices = extract_uniform_angles(n_subdivision, angles) #Indixes of the curve points closest to the unif ang
+        unif_subset = int(np.floor(n_frame/n_subdivision))
+    elif n_subdivision == 0:
+        indices = np.array([0, n_frame-1])
+        unif_subset = n_frame
+    else: 
+        print("Give as number of angles a positive integer")
+        return False
+        
     clock_param_fun_a = gs.zeros((n_frame, dim))
     clock_param_fun_a_lambda = gs.zeros((n_frame, dim))
-    # Create uniform subdivision
-    unif_subset = int(np.floor(n_frame/n_subdivision))
+
     for k in range(len(indices) - 1):
         argument = newdelta[indices[k]:indices[k + 1] + 1] #Taking a portion of the uniform param.
         newdel2 = np.linspace(argument[0], argument[-1], num = unif_subset)
@@ -126,9 +131,10 @@ def reparametrize_by_curvature(curve, lmbda = 1, unif_subset = 12):
         * λ * length + curvature (otherwise)
     - Cubic interpolation is applied to resample the segment.
     """
-    _, dim = curve.shape
+    N, dim = curve.shape
     length = compute_length(curve)
-    newdelta = np.linspace(0,1,unif_subset)
+    newdelta = np.linspace(0, 1, unif_subset)
+    #newdelta, curve = reparametrize_by_arc_length(curve, N, normalized = True)
     f_seconde = gs.zeros((unif_subset, dim))
     for i in range(2):
         for j in range (1,unif_subset-1, 1):
@@ -153,8 +159,8 @@ def reparametrize_by_curvature(curve, lmbda = 1, unif_subset = 12):
     function_parametrized_prop_to_curv_arc_length = gs.zeros((unif_subset, dim))
     for i in range(dim):
         #inter_func2 = interp1d(curvedelta, curve[:,i], kind='cubic', fill_value="extrapolate")
-        #inter_func2 = interp1d(curvedelta, curve[:,i], kind='linear')
-        inter_func2 = CubicSpline(curvedelta, curve[:,i])
+        inter_func2 = interp1d(curvedelta, curve[:,i], kind='linear')
+        #inter_func2 = CubicSpline(curvedelta, curve[:,i])
         function_parametrized_prop_to_curv_arc_length[:,i] = inter_func2(newcurvedelta)
 
     return function_parametrized_prop_to_curv_arc_length
@@ -181,8 +187,6 @@ def projection_prop_curv_lambda_length_in_R2(curve, N, lmbda = None, normalized 
     # --- First Step: Arc Length Parameterization ---
     length = compute_length(curve)
     newdelta, arc_length_parametrized_curve = reparametrize_by_arc_length(curve, N, normalized = normalized)
-
-    # --- Step 2: Second derivative (curvature numerator)
     f_seconde = gs.zeros(arc_length_parametrized_curve.shape)
     for i in range(2):
         for j in range (1,N-1, 1):
@@ -307,14 +311,12 @@ def projection_clock(curve, number_of_angles = 20, lmbda = None, visualize = Fal
     curve3 = check_and_shift_center_of_mass(curve3, verbose = visualize)
     angles = extract_angle_sequence(curve3)
     indices = extract_uniform_angles(number_of_angles, angles) #Indixes of the curve points closest to the unif ang
-
+    clock_param_fun_a = gs.zeros((N, dim))
     for k in range(len(indices) - 1):
         argument = newdelta[indices[k]:indices[k + 1] + 1] #Taking a portion of the uniform param.
-
-        # Create uniform subdivision
         unif_subset = int(np.floor(N/number_of_angles))
         newdel2 = np.linspace(argument[0], argument[-1], num = unif_subset)
-        clock_param_fun_a = gs.zeros((N, dim))
+        
         # Interpolate for each dimension
 
         for d in range(dim):
@@ -345,7 +347,7 @@ def projection_clock(curve, number_of_angles = 20, lmbda = None, visualize = Fal
             #seg = curve3[indices[k]:indices[k + 1] + 1]
             argument = newdelta[indices[k]:indices[k + 1] + 1]
             newdel2 = np.linspace(argument[0], argument[-1], num = unif_subset)
-            clock_param_fun_a_lambda[(k)*unif_subset:(k+1)*unif_subset], _, _ = projection_prop_curv_lambda_length_in_R2(curve3[indices[k]:indices[k + 1]], unif_subset, lmbda, normalized = True)
+            clock_param_fun_a_lambda[(k)*unif_subset:(k+1)*unif_subset], _, _ = projection_prop_curv_lambda_length_in_R2(clock_param_fun_a[k*unif_subset:(k + 1)*unif_subset], unif_subset, lmbda, normalized = True)
             if visualize:
                 plt.plot(
                 clock_param_fun_a_lambda[(k) * unif_subset: ( k + 1 ) * unif_subset, 0], 
@@ -399,7 +401,7 @@ def extract_uniform_angles(a, angles):
     indices[-1] = nb_frames-1
     for ii in range(indices.shape[0]-1):
         if indices[ii] == indices[ii+1] - 1 or indices[ii] == indices[ii+1] or indices[ii]> indices[ii+1] :
-            indices[ii+1] = indices[ii] + 3
+            #indices[ii+1] = indices[ii] + 3
             flag = True
     if flag:
             message = Fore.YELLOW + "WARNING: It seems the center of mass is not well positioned within the shape." + Style.RESET_ALL
@@ -481,7 +483,6 @@ def curvature_plot(f, new_curve, curvdel, signed_curvature):
     plt.tight_layout()
     plt.show()
 
-
 ######### MAIN ###########
 
 if __name__ == "__main__":
@@ -490,14 +491,25 @@ if __name__ == "__main__":
     #path = #INSERT THE PATH TO YOUR DATA
     A = scipy.io.loadmat(PATH)
     leaves = A['leaves_parameterized']
-    curve = leaves[687,:,:]
+    curve = leaves[67,:,:]
 
-    # Example curve: ellipse
-    t = np.linspace(0, 2*np.pi, 200)
-    a, b = 3.0, 1.0
-    x = a * np.cos(t)
-    y = b * np.sin(t)
-    #curve = np.column_stack([x, y])45
-    f = curve
-
-    _,_ = projection_clock(curve, number_of_angles = 20, lmbda = 0.5, visualize = True)
+    
+    nb_frames, dim = curve.shape
+    N = nb_frames
+    curve2 = gs.zeros((N, dim))
+    if compute_area(curve, absolute = False) < 0:
+        curve = np.flipud(curve)
+    newdelta, curve2 = reparametrize_by_arc_length(curve, N)
+    curve2 = get_max_y_and_roll(curve2)
+    area = compute_area(curve2)
+    curve2 = translate_center_of_mass(curve2)
+    curve3 = curve2/np.sqrt(np.abs(area))
+    plt.plot(curve3[:,0], curve3[:,1], 'b-')
+    curve3 = rotate_axis(curve3)
+    #projection_clock_a_lmbda(curve3, n_subdivision = 0, lmbda = 0.5, visualize = True )
+    testing_curve = reparametrize_by_curvature(curve3, lmbda = 1, unif_subset = nb_frames )
+    plt.plot(testing_curve[:,0], testing_curve[:,1], 'g*')
+    plt.axis('equal')
+    plt.show()
+    
+    #_,_ = projection_clock(curve, number_of_angles = 10, lmbda = 0.5, visualize = True)
