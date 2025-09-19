@@ -6,8 +6,37 @@ import os
 import scipy.io
 import matplotlib.path as mpltPath
 from visualize import plot_curve
+import math
+from scipy.spatial import Voronoi, Delaunay
 #from projection import projection_clock_a_lmbda
 
+def voronoi_diagram(curve):
+    """
+    ToDo
+    """
+    vor = Voronoi(curve)
+    curve_checker =mpltPath.Path(curve)
+    bool_list = []
+    for point in vor.vertices:
+        bool_list.append(curve_checker.contains_point(point))
+    xy_centers = vor.vertices[bool_list]
+    return xy_centers
+
+def center_of_the_contour(curve):
+    """
+    TO DO
+    """
+    center_of_contour = gs.array([np.mean(curve[:, 0]), np.mean(curve[:, 1])])
+    return center_of_contour
+
+def translate_in_center_of_countur(curve):
+    """
+    ToDo
+    """
+    center_contour = center_of_the_contour(curve)
+    shifted_curve = curve - center_contour
+
+    return shifted_curve
 
 
 def compute_area(curve, absolute = True):
@@ -293,7 +322,65 @@ def rotate_ellipse_surface(curve):
         rotated_curve[i,:] = rot90 @ V @ curve[i,:].T
     return rotated_curve
 
-def check_and_shift_center_of_mass(curve_to_check, tolerance=5e-4, verbose = False):
+def point_line_distance_and_projection(A, B, P = (0,0)):
+    """
+    Compute the distance from point P to the line defined by points A and B,
+    and return the projected point of P onto that line.
+    
+    Parameters:
+        A (tuple): (x1, y1) - first point on the line
+        B (tuple): (x2, y2) - second point on the line
+        P (tuple): (x0, y0) - the external point
+    
+    Returns:
+        distance (float): perpendicular distance from P to line AB
+        P_proj (tuple): coordinates of the projection of P onto line AB
+    """
+    x1, y1 = A
+    x2, y2 = B
+    x0, y0 = P
+    
+    # Line vector AB and vector AP
+    AB = (x2 - x1, y2 - y1)
+    AP = (x0 - x1, y0 - y1)
+    
+    # Distance using cross product magnitude
+    cross = AB[0] * AP[1] - AB[1] * AP[0]
+    distance = abs(cross) / math.sqrt(AB[0]**2 + AB[1]**2)
+    
+    # Projection factor t
+    dot = AP[0] * AB[0] + AP[1] * AB[1]
+    denom = AB[0]**2 + AB[1]**2
+    t = dot / denom
+    
+    # Projected point
+    P_proj = (x1 + t * AB[0], y1 + t * AB[1])
+    
+    return distance, P_proj
+
+def check_shift_voronoi(curve_to_check, verbose = False):
+    """
+    To Do
+    """
+    path = mpltPath.Path(curve_to_check)
+    if path.contains_point([0,0]):
+        return curve_to_check.copy()
+
+    voronoi_points = voronoi_diagram(curve_to_check)
+    distances = np.linalg.norm(voronoi_points, axis=1)
+    closest_point = voronoi_points[np.argmin(distances)]
+    shifted_curve = curve_to_check - closest_point
+    if verbose:
+        print("The curve was shifted so the origin lies inside.")
+        plt.plot(curve_to_check[:,0], curve_to_check[:,1], 'g-', label='Original curve')
+        plt.plot([0],[0], 'rx', label='Origin')
+        plt.plot(shifted_curve[:,0], shifted_curve[:,1], 'y-', label='Shifted curve')
+        plt.axis('equal')
+        plt.legend()
+        plt.show()
+    return shifted_curve
+
+def check_and_shift_center_of_mass(curve_to_check, tolerance=5e-2, verbose = False):
     """
     Shift a 2D curve (polygon) if necessary so that the origin (0,0) lies inside it,
     with a safety tolerance from the border.
@@ -319,15 +406,20 @@ def check_and_shift_center_of_mass(curve_to_check, tolerance=5e-4, verbose = Fal
     if path.contains_point([0,0]):
         return curve_to_check.copy()
 
-    # Find closest point to origin
     distances = np.linalg.norm(curve_to_check, axis=1)
     closest_point = curve_to_check[np.argmin(distances)]
-
+    closest_point_1 = curve_to_check[np.argmin(distances)-1]
+    closest_point_2 = curve_to_check[np.argmin(distances)+1]
     # Shift vector toward origin, overshoot slightly
-    shift_vec = -closest_point
+    dist_1, shift_vect_1 = (point_line_distance_and_projection(closest_point, closest_point_1))
+    dist_2, shift_vect_2 = (point_line_distance_and_projection(closest_point, closest_point_2))
+    if dist_1 > dist_2:
+        shift_vec = - np.array(shift_vect_1)
+    else:
+        shift_vec = - np.array(shift_vect_2)
     norm = np.linalg.norm(shift_vec)
     if norm > 0:
-        shift_vec = shift_vec * (1 + tolerance / norm)
+        shift_vec = shift_vec * (1 + tolerance)
 
     shifted_curve = curve_to_check + shift_vec
 
